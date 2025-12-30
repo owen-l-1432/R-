@@ -1,0 +1,104 @@
+---
+title: "Kaggle"
+output: pdf_document
+date: "2024-11-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+edu_train = read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_Education_train_set.csv")
+edu_train$psu_hh_idcode = paste(edu_train$psu, edu_train$hh, edu_train$idcode, sep="_")
+edu_train$psu = NULL
+edu_train$hh = NULL
+edu_train$idcode = NULL
+
+hh_train = read.csv(file="///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_HouseholdInfo_train_set.csv")
+hh_train$psu_hh_idcode = paste(hh_train$psu, hh_train$hh, hh_train$idcode, sep="_")
+hh_train$psu = NULL
+hh_train$hh = NULL
+hh_train$idcode = NULL
+
+sp_train = read.csv(file="///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_SubjectivePoverty_train_set.csv")
+
+
+library(dplyr)
+library(xgboost)
+library(randomForest)
+```
+
+```{r}
+ds = merge(edu_train, hh_train, by = "psu_hh_idcode")
+ds = merge(x=ds, y=sp_train, by = "psu_hh_idcode")
+
+
+res = cbind(ds$subjective_poverty_1, ds$subjective_poverty_2, ds$subjective_poverty_3, ds$subjective_poverty_4, ds$subjective_poverty_5, ds$subjective_poverty_6, ds$subjective_poverty_7, ds$subjective_poverty_8, ds$subjective_poverty_9, ds$subjective_poverty_10)
+
+
+n=0
+v = c()
+for (i in 1:5334) {
+  for (j in 1:10) {
+    if (is.na(res[i, j])) {
+      n=0
+      break
+    }
+    if (res[i, j] == 1){
+      n=j
+      break
+    }
+  }
+  v=append(v, n)
+}
+
+
+
+
+ds=ds[, (0:(ncol(ds)-10))]
+
+
+ds <- ds %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), round(mean(., na.rm = TRUE)), .)))
+
+avg_v = round(mean(v[v!=0]))
+
+v[v==0] = sample(1:10, 1)
+ds[is.na(ds)]=0
+ 
+model_RF = randomForest(factor(v)
+                           ~., data = ds)
+
+
+
+
+```
+
+```{r}
+edu_test = read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_Education_test_set.csv")
+edu_test$psu_hh_idcode = paste(edu_test$psu, edu_test$hh, edu_test$idcode, sep="_")
+edu_test$psu = NULL
+edu_test$hh = NULL
+edu_test$idcode = NULL
+
+
+hh_test = read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_HouseholdInfo_test_set.csv")
+hh_test$psu_hh_idcode = paste(hh_test$psu, hh_test$hh, hh_test$idcode, sep="_")
+hh_test$psu = NULL
+hh_test$hh = NULL
+hh_test$idcode = NULL
+
+
+
+ds_test = (merge(edu_test, hh_test, by = "psu_hh_idcode"))
+
+ds_test <- ds_test %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), round(mean(., na.rm = TRUE)), .)))
+ds_test[is.na(ds_test)] = 0
+
+
+res = predict(model_RF, newdata = ds_test, type = "prob")
+res = cbind(ds_test$psu_hh_idcode, res)
+
+```
