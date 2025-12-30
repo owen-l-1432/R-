@@ -1,0 +1,488 @@
+---
+title: "Stat441 Final Project"
+output: pdf_document
+---
+
+# Preliminary
+```{r}
+rm(list=ls())
+set.seed(441)
+library(tidyr)
+library(xgboost)
+library(dplyr)
+library(zoo)
+library(class)
+library(caret)
+library(randomForest)
+library(SuperLearner)
+library(mlogit)
+library(e1071)
+
+```
+
+# Load the data
+```{r}
+edu_train <- read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_Education_train_set.csv")
+edu_test <- read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_Education_test_set.csv")
+edu_train$psu_hh_idcode <- with(edu_train, paste(psu, hh, idcode, sep = "_"))
+edu_train$psu <- NULL
+edu_train$hh <- NULL
+edu_train$idcode <- NULL
+edu_test$psu_hh_idcode <- with(edu_test, paste(psu, hh, idcode, sep = "_"))
+edu_test$psu <- NULL
+edu_test$hh <- NULL
+edu_test$idcode <- NULL
+colnames(edu_train)[1:66] <- paste0("edu", 1:66)
+colnames(edu_test)[1:66] <- paste0("edu", 1:66)
+
+Hh_train <- read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_HouseholdInfo_train_set.csv")
+Hh_test <- read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_HouseholdInfo_test_set.csv")
+Hh_train$psu_hh_idcode <- with(Hh_train, paste(psu, hh, idcode, sep = "_"))
+Hh_train$psu <- NULL
+Hh_train$hh <- NULL
+Hh_train$idcode <- NULL
+Hh_test$psu_hh_idcode <- with(Hh_test, paste(psu, hh, idcode, sep = "_"))
+Hh_test$psu <- NULL
+Hh_test$hh <- NULL
+Hh_test$idcode <- NULL
+colnames(Hh_train)[2:23] <- paste0("Hh", 1:22)
+colnames(Hh_test)[2:23] <- paste0("Hh", 1:22)
+
+SP_train <- read.csv(file = "///Users/owenl/Desktop/f-2024-kaggle-contest-for-classification/module_SubjectivePoverty_train_set.csv")
+
+training <- merge(edu_train, Hh_train, by = "psu_hh_idcode")
+```
+
+# Fit a XGBoost model
+```{r}
+d = merge(training, SP_train, by = "psu_hh_idcode")
+
+d$Hh3 = NULL
+d$Hh5[d$Hh4 < 12] = 100
+d$Hh6[d$Hh4 < 12] = 100
+d$Hh7[d$Hh4 < 12] = 100
+d$Hh8[d$Hh4 < 12] = 100
+d$Hh7[d$Hh6 == 4] = 100
+d$Hh8[d$Hh6 == 4] = 100
+d$Hh7[d$Hh6 == 5] = 100
+d$Hh8[d$Hh6 == 5] = 100
+d$Hh8[d$Hh7 == 2] = 100
+d$Hh12[d$Hh11 == 2] = 100
+d$Hh15[d$Hh14 == 1] = 100
+d$Hh18[d$Hh17 == 2] = 100
+d$Hh21[d$Hh20 == 1] = 100
+
+d$edu9[d$edu8 == 2] = 100
+d$edu10[d$edu8 == 2] = 100
+d$edu10[d$edu9 == 1] = 100
+d$edu11[d$edu9 == 1] = 100
+d$edu11[is.na(d$edu10)==FALSE]= 100
+d$edu12[is.na(d$edu10)==FALSE]=100
+d$edu13[is.na(d$edu10)==FALSE]=100
+d$edu12[is.na(d$edu11)==FALSE]=100
+d$edu13[is.na(d$edu11)==FALSE]=100
+d$edu15[d$edu14==2] =100
+d$edu16[d$edu14==2] = 100
+d$edu16[d$edu15==1] = 100
+d$edu17[d$edu15==1] = 100
+d$edu18[d$edu15==1] = 100
+d$edu19[d$edu15==1] = 100
+d$edu20[d$edu15==1] = 100
+d$edu17[is.na(d$edu16)==FALSE] = 100
+d$edu18[is.na(d$edu16)==FALSE] = 100
+d$edu19[is.na(d$edu16)==FALSE] = 100
+d$edu25[d$edu24<5]=100
+d$edu25[d$edu24==999]=100
+d$edu26[d$edu24==999]=100
+d$edu27[d$edu24==999]=100
+d$edu28[d$edu24==999]=100
+d$edu29[d$edu24==999]=100
+d$edu30[d$edu24==999]=100
+d$edu31[d$edu24==999]=100
+d$edu32[d$edu24==999]=100
+d$edu29[d$edu28==1 | d$edu28==2 | d$edu28==3] = 100
+d$edu30[d$edu28==1 | d$edu28==2 | d$edu28==3] = 100
+d$edu31[d$edu28==1 | d$edu28==2 |d$edu28==3] = 100
+d$edu31[d$edu30 == 2] = 100
+d$edu44[d$edu43==1] =100
+d$edu47[d$edu46 == 2] = 100
+d$edu48[d$edu46 == 2] =100
+d$edu49[d$edu46 == 2] = 100
+d$edu49[d$edu48 == 4] = 100
+d$edu51[d$edu50==2] =100
+d$edu52[d$edu50==2] =100
+d$edu53[d$edu50==2] =100
+d$edu54[d$edu50==2] =100
+d$edu55[d$edu50==2] =100
+d$edu56[d$edu50==2] =100
+d$edu55[d$edu54==2]=100
+d$edu56[d$edu54==2]=100
+d$edu58[d$edu57 == 2] = 100
+d$edu60[d$edu59 == 2] = 100
+d$edu62[d$edu61==2]=100
+d$edu63[d$edu61==2]=100
+d$edu65[d$edu64==2] = 100
+
+rn = which(is.na(d$Hh21)==FALSE, )
+beg = which(names(d) == "Hh22")
+end = which(names(d) == "Hh22")
+l = length(rn)
+for (i in 1:l) {
+  d[i, beg:end] <- 100
+}
+
+rn = which(is.na(d$Hh19)==FALSE, )
+beg = which(names(d) == "Hh19")
+end = which(names(d) == "Hh22")
+l = length(rn)
+for (i in 1:l) {
+  d[i, beg:end] <- 100
+}
+
+rn = which(d$edu3 == 2, )
+beg = which(names(d) == "edu4")
+end = which(names(d) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  d[i, beg:end] <- 100
+}
+
+rn = which(d$edu17 == 13, )
+beg = which(names(d) == "edu18")
+end = which(names(d) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  d[i, beg:end] <- 100
+}
+
+
+rn = which(d$edu19 == 2, )
+beg = which(names(d) == "edu20")
+end = which(names(d) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  d[i, beg:end] <- 100
+}
+
+rn = which((d$edu20) == 2, )
+beg = which(names(d) == "edu21")
+end = which(names(d) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  d[i, beg:end] <- 100
+}
+
+
+d[is.na(d)] = -1
+
+
+SP_train <- d[, which(names(d) == "subjective_poverty_1"): which(names(d) == "subjective_poverty_10")]
+
+params <- list(
+  eta = 0.1,
+  objective = "multi:softprob", 
+  num_class = 10,
+  eval_metric = "mlogloss",
+  max_depth = 4, 
+  subsample = 0.75
+)
+nrounds <- 130
+
+n=0
+v = c()
+for (i in 1:nrow(SP_train)) {
+  for (j in 1:10) {
+    if (SP_train[i, j] == 1){
+      n=j
+      break
+    }
+  }
+  v=append(v, n)
+}
+
+d = d[,-1]
+training = d[, -c(which(names(d) == "subjective_poverty_1"): which(names(d) == "subjective_poverty_10"))]
+
+training[] <- lapply(training, function(x) {
+  if (is.character(x)) {
+    as.numeric(x)
+  } else {
+    x
+  }
+})
+v = v-1
+
+#fit a xgboost model
+# training = as.matrix(training)
+# dtrain = xgb.DMatrix(data = training, label = v)
+#  xgb_model <- xgboost(
+#   params = params,
+#   data = dtrain,
+#   nrounds = nrounds,
+#   early_stopping_rounds = 10,
+#   verbose=0
+# )
+```
+
+
+
+```{r}
+#for training ensemble model
+training_df = data.frame(training)
+training_df$v = v
+
+train_index <- sample(1:nrow(training_df), 0.8 * nrow(training_df))
+train_data <- training_df[train_index, ]
+test_data <- training_df[-train_index, ]
+
+Y_train <- as.numeric(train_data$v) 
+X_train <- train_data[, -ncol(training_df)]
+Y_test <- as.numeric(test_data$v)
+X_test <- test_data[, -ncol(training_df)]
+
+rf_model <- randomForest(x = X_train, y = as.factor(Y_train), type = "prob", ntree = 800, mtry = 4, nodesize = 2)
+xgb_model <- xgboost(data = as.matrix(X_train), label = Y_train, nrounds = 100, objective = "multi:softprob", num_class = 10, eta = 0.1, max_depth=4, subsample =0.75, verbose = 0)
+
+#also fit svm_model
+X_train_svm = X_train[, !colnames(X_train) %in% "Hh10"]
+svm_model = svm(y = as.factor(Y_train), x = X_train_svm,gamma=0.01,
+               cost = 1, kernel = "radial", probability = TRUE)
+```
+
+#step 2
+```{r}
+rf_prob <- predict(rf_model, newdata=X_test, type="prob")  # Probabilities from Random Forest
+
+rf_probs_df <- as.data.frame(rf_prob)
+
+colnames(rf_probs_df) <- paste0("subjective_poverty_rf_", 1:10)
+
+xgb_prob <- predict(xgb_model, newdata = as.matrix(X_test), type = "prob")  # Probabilities fromXGBoost
+ xgb_probs_matrix <- matrix(xgb_prob, ncol = 10, byrow = TRUE)
+
+xgb_probs_df <- as.data.frame(xgb_probs_matrix)
+colnames(xgb_probs_df) <- paste0("subjective_poverty_xgb_", 1:10)
+
+
+#also svm_model
+X_test_svm = X_test[, !colnames(X_test) %in% "Hh10"]
+svm_prob = predict(svm_model, newdata = X_test_svm, probability = TRUE)
+probabilities <- attr(svm_prob, "probabilities")
+svm_probs_df <- as.data.frame(probabilities[, order(colnames(probabilities))])
+colnames(svm_probs_df) <- paste0("subjective_poverty_svm_", 1:10)
+```
+#step 3
+```{r}
+meta_data <- data.frame(
+  #id = 1:nrow(X_test),
+  actual_class = as.numeric(Y_test)  # Convert factor to numeric
+)
+meta_data = cbind(meta_data, rf_probs_df)
+meta_data = cbind(meta_data, xgb_probs_df)
+meta_data = cbind(meta_data, svm_probs_df)
+# Reshape data into long format
+# meta_long <- meta_data %>%
+#   pivot_longer(
+#     cols = starts_with("rf_probs") | starts_with("xgb_probs"),
+#     names_to = c("model", "class"),
+#     names_pattern = "(.*)_probs\\.(.*)",
+#     values_to = "probability"
+#   )
+
+#create choice variable:
+# id = meta_long$id
+# alt = 0:9
+# cho = as.integer(alt == meta_long$actual_class[id])
+# meta_long$choice = cho
+
+#Logistic regression for the meta-model
+# meta_long$choice = as.logical(meta_long$choice)
+# mlog_d = mlogit.data(data = meta_long, alt.levels = unique(meta_long$class), shape = "long",
+#                      id.var = "id", choice = "choice")
+meta_model <- nnet::multinom(as.factor(actual_class) ~ ., data = meta_data)
+summary(meta_model)  # Coefficients represent the weights of each model
+```
+
+#prepare test data
+```{r}
+merged_data_test <- merge(edu_test, Hh_test, by = "psu_hh_idcode")
+id = merged_data_test$psu_hh_idcode
+merged_data_test$Hh3 = NULL
+merged_data_test$Hh5[merged_data_test$Hh4 < 12] = 100
+merged_data_test$Hh6[merged_data_test$Hh4 < 12] = 100
+merged_data_test$Hh7[merged_data_test$Hh4 < 12] = 100
+merged_data_test$Hh8[merged_data_test$Hh4 < 12] = 100
+merged_data_test$Hh7[merged_data_test$Hh6 == 4] = 100
+merged_data_test$Hh8[merged_data_test$Hh6 == 4] = 100
+merged_data_test$Hh7[merged_data_test$Hh6 == 5] = 100
+merged_data_test$Hh8[merged_data_test$Hh6 == 5] = 100
+merged_data_test$Hh8[merged_data_test$Hh7 == 2] = 100
+merged_data_test$Hh12[merged_data_test$Hh11 == 2] = 100
+merged_data_test$Hh15[merged_data_test$Hh14 == 1] = 100
+merged_data_test$Hh18[merged_data_test$Hh17 == 2] = 100
+merged_data_test$Hh21[merged_data_test$Hh20 == 1] = 100
+
+merged_data_test$edu9[merged_data_test$edu8 == 2] = 100
+merged_data_test$edu10[merged_data_test$edu8 == 2] = 100
+merged_data_test$edu10[merged_data_test$edu9 == 1] = 100
+merged_data_test$edu11[merged_data_test$edu9 == 1] = 100
+merged_data_test$edu11[is.na(merged_data_test$edu10)==FALSE]= 100
+merged_data_test$edu12[is.na(merged_data_test$edu10)==FALSE]=100
+merged_data_test$edu13[is.na(merged_data_test$edu10)==FALSE]=100
+merged_data_test$edu12[is.na(merged_data_test$edu11)==FALSE]=100
+merged_data_test$edu13[is.na(merged_data_test$edu11)==FALSE]=100
+merged_data_test$edu15[merged_data_test$edu14==2] = 100
+merged_data_test$edu16[merged_data_test$edu14==2] = 100
+merged_data_test$edu16[merged_data_test$edu15==1] = 100
+merged_data_test$edu17[merged_data_test$edu15==1] = 100
+merged_data_test$edu18[merged_data_test$edu15==1] = 100
+merged_data_test$edu19[merged_data_test$edu15==1] = 100
+merged_data_test$edu20[merged_data_test$edu15==1] = 100
+merged_data_test$edu17[is.na(merged_data_test$edu16)==FALSE] = 100
+merged_data_test$edu18[is.na(merged_data_test$edu16)==FALSE] = 100
+merged_data_test$edu19[is.na(merged_data_test$edu16)==FALSE] = 100
+merged_data_test$edu25[merged_data_test$edu24<5]=100
+merged_data_test$edu25[merged_data_test$edu24==999]=100
+merged_data_test$edu26[merged_data_test$edu24==999]=100
+merged_data_test$edu27[merged_data_test$edu24==999]=100
+merged_data_test$edu28[merged_data_test$edu24==999]=100
+merged_data_test$edu29[merged_data_test$edu24==999]=100
+merged_data_test$edu30[merged_data_test$edu24==999]=100
+merged_data_test$edu31[merged_data_test$edu24==999]=100
+merged_data_test$edu32[merged_data_test$edu24==999]=100
+merged_data_test$edu29[merged_data_test$edu28==1 | merged_data_test$edu28==2 | merged_data_test$edu28==3] = 100
+merged_data_test$edu30[merged_data_test$edu28==1 | merged_data_test$edu28==2 | merged_data_test$edu28==3] = 100
+merged_data_test$edu31[merged_data_test$edu28==1 | merged_data_test$edu28==2 |merged_data_test$edu28==3] = 100
+merged_data_test$edu31[merged_data_test$edu30 == 2] = 100
+merged_data_test$edu44[merged_data_test$edu43==1] =100
+merged_data_test$edu47[merged_data_test$edu46 == 2] = 100
+merged_data_test$edu48[merged_data_test$edu46 == 2] = 100
+merged_data_test$edu49[merged_data_test$edu46 == 2] = 100
+merged_data_test$edu49[merged_data_test$edu48 == 4] = 100
+merged_data_test$edu51[merged_data_test$edu50==2] =100
+merged_data_test$edu52[merged_data_test$edu50==2] =100
+merged_data_test$edu53[merged_data_test$edu50==2] =100
+merged_data_test$edu54[merged_data_test$edu50==2] =100
+merged_data_test$edu55[merged_data_test$edu50==2] =100
+merged_data_test$edu56[merged_data_test$edu50==2] =100
+merged_data_test$edu55[merged_data_test$edu54==2]=100
+merged_data_test$edu56[merged_data_test$edu54==2]=100
+merged_data_test$edu58[merged_data_test$edu57 == 2] = 100
+merged_data_test$edu60[merged_data_test$edu59 == 2] = 100
+merged_data_test$edu62[merged_data_test$edu61==2]=100
+merged_data_test$edu63[merged_data_test$edu61==2]=100
+merged_data_test$edu65[merged_data_test$edu64==2] = 100
+
+rn = which(is.na(merged_data_test$Hh21)==FALSE, )
+beg = which(names(merged_data_test) == "Hh22")
+end = which(names(merged_data_test) == "Hh22")
+l = length(rn)
+for (i in 1:l) {
+  merged_data_test[i, beg:end] <- 100
+}
+
+rn = which(is.na(merged_data_test$Hh19)==FALSE, )
+beg = which(names(merged_data_test) == "Hh19")
+end = which(names(merged_data_test) == "Hh22")
+l = length(rn)
+for (i in 1:l) {
+  merged_data_test[i, beg:end] <- 100
+}
+
+rn = which(merged_data_test$edu3 == 2, )
+beg = which(names(merged_data_test) == "edu4")
+end = which(names(merged_data_test) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  merged_data_test[i, beg:end] <- 100
+}
+
+rn = which(merged_data_test$edu17 == 13, )
+beg = which(names(merged_data_test) == "edu18")
+end = which(names(merged_data_test) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  merged_data_test[i, beg:end] <- 100
+}
+
+
+rn = which(merged_data_test$edu19 == 2, )
+beg = which(names(merged_data_test) == "edu20")
+end = which(names(merged_data_test) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  merged_data_test[i, beg:end] <- 100
+}
+
+rn = which((merged_data_test$edu20) == 2, )
+beg = which(names(merged_data_test) == "edu21")
+end = which(names(merged_data_test) == "edu66")
+l = length(rn)
+for (i in 1:l) {
+  merged_data_test[i, beg:end] <- 100
+}
+
+merged_data_test[is.na(merged_data_test)] = -1
+merged_data_test = merged_data_test[, -1]
+```
+
+#step 4
+```{r}
+#We have training_df
+
+# Train Random Forest on training_df
+rf_model_final <- randomForest(as.factor(v) ~ ., data = training_df, ntree = 800, mtry=4, nodesize = 2)
+rf_probs_test <- predict(rf_model_final, newdata = merged_data_test, type = "prob")
+
+# Train XGBoost on Training_df
+xgb_training <- xgb.DMatrix(data = as.matrix(training_df[, -ncol(training_df)]), label = v)
+xgb_model_final <- xgboost(data = xgb_training, max_depth = 4,subsample = 0.75, nrounds = 120, objective = "multi:softprob", num_class = 10, verbose = 0)
+xgb_probs_test <- predict(xgb_model_final, as.matrix(merged_data_test), type = "prob")
+xgb_probs_test <- data.frame(matrix(xgb_probs_test, ncol = 10, byrow = TRUE))
+
+# Train SVM on Training_df
+training_svm = training_df[, !colnames(training_df) %in% "Hh10"]
+svm_model_final = svm(as.factor(v)~.,data = training_svm, gamma=0.01,
+                cost = 1, kernel = "radial", probability = TRUE)
+merged_data_test_svm = merged_data_test[, !colnames(merged_data_test) %in% "Hh10"]
+svm_probs_test = predict(svm_model_final, newdata = merged_data_test, probability = TRUE)
+probabilities <- attr(svm_probs_test, "probabilities")
+svm_probs_test <- data.frame(probabilities[, order(colnames(probabilities))])
+```
+
+#Step 5
+```{r}
+# w0 = as.numeric(coef(meta_model)[,1])
+# w = data.frame(coef(meta_model)[, -1])
+# combined_probs <- matrix(0, nrow = nrow(rf_probs_test), ncol = ncol(rf_probs_test))
+# softmax <- function(x) {
+#   exp_x <- exp(x)
+#   return(exp_x / sum(exp_x))
+# }
+# 
+# 
+# for (i in 1:nrow(rf_probs_test)) {
+#   # For each class (1 to 9, as class 0 is the baseline)
+#   bruh  = numeric(10)
+#   bruh[1] = 0
+#   for (c in 2:10) {
+#     bruh[c] <- (w0[c-1]+sum(w[c-1, 1:10] * rf_probs_test[i, ] +
+#                                 w[c-1, 11:20] * xgb_probs_test[i, ]))
+#   }
+#   bruh = softmax(bruh)
+# 
+#   # Normalize to ensure probabilities sum to 1 for each instance
+#   combined_probs[i, ] <- bruh
+# }
+
+data_test= data.frame(cbind(rf_probs_test, xgb_probs_test, svm_probs_test))
+colnames(data_test)[1:10] <- paste0("subjective_poverty_rf_", 1:10)
+colnames(data_test)[11:20] <- paste0("subjective_poverty_xgb_", 1:10)
+colnames(data_test)[21:30] <- paste0("subjective_poverty_svm_", 1:10)
+r = predict(meta_model, newdata=data_test, type = "prob")
+colnames(r) <- paste0("subjective_poverty_", 1:10)
+r = cbind(id, r)
+colnames(r)[1] = "psu_hh_idcode"
+```
+
+
